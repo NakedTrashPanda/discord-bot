@@ -728,35 +728,84 @@ def setup(bot: discord.Client):
 
         await interaction.response.send_message(embeds=[embed, admin_embed], ephemeral=True)
 
+    @tree.command(name="undo", description="Admin: Undo the most recent media post (delete message, restore files).")
+    async def undocmd(interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("You need administrator permissions to use this.", ephemeral=True)
+            return
+        
+        history = load_history()
+        metadata = history.get('metadata', {})
+        
+        # Find most recent by uploaddate
+        recent_entries = [(fname, data) for fname, data in metadata.items() if 'uploaddate' in data]
+        if not recent_entries:
+            await interaction.response.send_message("No posts found in history.", ephemeral=True)
+            return
+        
+        recent_entries.sort(key=lambda x: x[1]['uploaddate'], reverse=True)
+        latest_fname, latest_data = recent_entries[0]
+        message_id = latest_data['message_id']
+        
+        try:
+            channel = interaction.guild.get_channel(MEDIA_CHANNEL_ID)
+            if channel:
+                message = await channel.fetch_message(message_id)
+                await message.delete()
+        except:
+            pass  # Ignore if message gone
+        
+        # Restore single file
+        archive_path = ARCHIVE_FOLDER / latest_fname
+        media_path = MEDIA_FOLDER / latest_fname
+        if archive_path.exists():
+            archive_path.rename(media_path)
+        else:
+            await interaction.response.send_message(f"Archive file missing: {latest_fname}", ephemeral=True)
+            return
+        
+        # Clean history for this file only
+        del metadata[latest_fname]
+        history['uploaded_files'] = [f for f in history.get('uploaded_files', []) if f != latest_fname]
+        history['metadata'] = metadata
+        save_history(history)
+        
+        # Clear ratings
+        ratings = load_media_ratings()
+        ratings.pop(latest_fname, None)
+        save_media_ratings(ratings)
+        
+        await interaction.response.send_message(f"✅ Undo complete: Restored '{latest_fname}'", ephemeral=True)
+
+
         # ========== Event Handlers ==========
     @bot.event
-    async def 
-    on_raw_reaction_add(payload):
+    async def on_raw_reaction_add(payload):
         """Track ANY reaction as a vote (one vote per user per message)."""
         if payload.user_id == bot.user.id:
-        return
+            return
 
-    history = load_history()
-    metadata = history.get("metadata", {})
-    ratings = load_media_ratings()
+        history = load_history()
+        metadata = history.get("metadata", {})
+        ratings = load_media_ratings()
 
-    # Find files from this message
-    rated_files = [
-        filename for filename, data in metadata.items()
-        if data.get("message_id") == payload.message_id
-    ]
+        # Find files from this message
+        rated_files = [
+            filename for filename, data in metadata.items()
+            if data.get("message_id") == payload.message_id
+        ]
 
-    if not rated_files:
-        return
+        if not rated_files:
+            return
 
-    # Count unique voters per message (not per emoji)
-    for filename in rated_files:
-        if filename not in ratings:
-            ratings[filename] = {"votes": 0, "voters": []}
+        # Count unique voters per message (not per emoji)
+        for filename in rated_files:
+            if filename not in ratings:
+                ratings[filename] = {"votes": 0, "voters": []}
+            
+            user_id = str(payload.user_id)
+            if user_id not in ratings[filename]["voters"]:
+                ratings[filename]["votes"] += 1
+                ratings[filename]["voters"].append(user_id)
         
-        user_id = str(payload.user_id)
-        if user_id not in ratings[filename]["voters"]:
-            ratings[filename]["votes"] += 1
-            ratings[filename]["voters"].append(user_id)
-    
-    save_media_ratings(ratings)
+        save_media_ratings(ratings)
