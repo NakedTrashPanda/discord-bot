@@ -239,9 +239,6 @@ async def daily_upload():
         if f.suffix.lower() in VIDEO_EXTENSIONS and f.name not in uploaded_set
     ]
 
-    print(f"Available: {len(images)} images, {len(videos)} videos")
-    print(f"Selection order: {SELECTION_ORDER}")
-
     batch = select_batch(
         images,
         videos,
@@ -731,51 +728,111 @@ def setup(bot: discord.Client):
     @tree.command(name="undo", description="Admin: Undo the most recent media post (delete message, restore files).")
     async def undocmd(interaction: discord.Interaction):
         if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("You need administrator permissions to use this.", ephemeral=True)
+            await interaction.response.send_message("❌ You need administrator permissions to use this.", ephemeral=True)
             return
+        
+        # Initial ephemeral message
+        await interaction.response.send_message("🔄 Attempting to undo the last media post...", ephemeral=True)
+        status_messages = ["🔄 Initializing undo process..."]
         
         history = load_history()
         metadata = history.get('metadata', {})
         
-        # Find most recent by uploaddate
-        recent_entries = [(fname, data) for fname, data in metadata.items() if 'uploaddate' in data]
+        # Find the message_id of the most recent batch
+        recent_entries = [(fname, data) for fname, data in metadata.items() if 'upload_date' in data and 'message_id' in data]
         if not recent_entries:
-            await interaction.response.send_message("No posts found in history.", ephemeral=True)
+            await interaction.edit_original_response(content="❌ No posts found in history with 'upload_date' and 'message_id' to undo.")
             return
         
-        recent_entries.sort(key=lambda x: x[1]['uploaddate'], reverse=True)
-        latest_fname, latest_data = recent_entries[0]
-        message_id = latest_data['message_id']
+        recent_entries.sort(key=lambda x: x[1]['upload_date'], reverse=True)
+        latest_message_id = recent_entries[0][1]['message_id']
         
+        # Find all files associated with this latest message_id
+        batch_files_to_undo = []
+        for fname, data in metadata.items():
+            if data.get('message_id') == latest_message_id:
+                batch_files_to_undo.append((fname, data))
+        
+        if not batch_files_to_undo:
+            await interaction.edit_original_response(content="❌ Could not identify files for the most recent batch.")
+            return
+
+        status_messages.append(f"Identified batch with message ID `{latest_message_id}` containing {len(batch_files_to_undo)} file(s).")
+        await interaction.edit_original_response(content="\n".join(status_messages))
+
+        # --- PRE-CHECK: Verify all files exist in archive before proceeding ---
+        missing_archive_files = []
+        for fname, _ in batch_files_to_undo:
+            archive_path = ARCHIVE_FOLDER / fname
+            if not archive_path.exists():
+                missing_archive_files.append(fname)
+        
+        if missing_archive_files:
+            error_msg = "❌ Aborting undo: The following archived file(s) are missing and cannot be restored:\n"
+            error_msg += "\n".join([f"- `{f}`" for f in missing_archive_files])
+            error_msg += "\n\nDiscord post will NOT be deleted."
+            await interaction.edit_original_response(content=error_msg)
+            print(f"Aborting undo due to missing archive files: {missing_archive_files}") # Server-side log
+            return
+        # --- END PRE-CHECK ---
+
+        # Delete the Discord message for the batch
         try:
             channel = interaction.guild.get_channel(MEDIA_CHANNEL_ID)
-            if channel:
-                message = await channel.fetch_message(message_id)
+            if channel and latest_message_id:
+                message = await channel.fetch_message(latest_message_id)
                 await message.delete()
-        except:
-            pass  # Ignore if message gone
+                status_messages.append(f"✅ Original Discord message `{latest_message_id}` deleted.")
+            else:
+                status_messages.append(f"⚠️ Could not delete Discord message `{latest_message_id}` (channel not found or message_id missing).")
+        except discord.errors.NotFound:
+            status_messages.append(f"⚠️ Original Discord message `{latest_message_id}` not found, likely already deleted.")
+        except Exception as e:
+            status_messages.append(f"❌ Error deleting Discord message `{latest_message_id}`: {e}")
+            print(f"Error deleting Discord message: {e}") # Server-side logging
+        await interaction.edit_original_response(content="\n".join(status_messages))
+
+        restored_files_count = 0
+        errors_during_restoration = []
+
+        for fname, data in batch_files_to_undo:
+            # Restore single file
+            archive_path = ARCHIVE_FOLDER / fname
+            media_path = MEDIA_FOLDER / fname
+            
+            if archive_path.exists():
+                try:
+                    archive_path.rename(media_path)
+                    restored_files_count += 1
+                    status_messages.append(f"✅ Restored: `{fname}`")
+                except Exception as e:
+                    errors_during_restoration.append(f"❌ Error restoring `{fname}`: {e}")
+                    print(f"Error renaming file '{fname}': {e}") # Server-side logging
+            else:
+                errors_during_restoration.append(f"❌ Archive file missing for `{fname}`.")
+                print(f"Archive file '{fname}' not found at {archive_path}") # Server-side logging
+            
+            # Clean history for this file only
+            if fname in metadata:
+                del metadata[fname]
+            history['uploaded_files'] = [f for f in history.get('uploaded_files', []) if f != fname]
+            
+            # Clear ratings
+            ratings = load_media_ratings()
+            if fname in ratings:
+                ratings.pop(fname, None)
+                save_media_ratings(ratings) # Save ratings after each file removal
+            
+            await interaction.edit_original_response(content="\n".join(status_messages + errors_during_restoration))
         
-        # Restore single file
-        archive_path = ARCHIVE_FOLDER / latest_fname
-        media_path = MEDIA_FOLDER / latest_fname
-        if archive_path.exists():
-            archive_path.rename(media_path)
-        else:
-            await interaction.response.send_message(f"Archive file missing: {latest_fname}", ephemeral=True)
-            return
+        history['metadata'] = metadata # Ensure updated metadata is assigned back
+        save_history(history) # Save history once after processing all files in batch
         
-        # Clean history for this file only
-        del metadata[latest_fname]
-        history['uploaded_files'] = [f for f in history.get('uploaded_files', []) if f != latest_fname]
-        history['metadata'] = metadata
-        save_history(history)
+        final_message = f"✅ Undo complete: Restored {restored_files_count} file(s) from the last batch."
+        if errors_during_restoration:
+            final_message += "\n\n**Errors encountered during restoration:**\n" + "\n".join(errors_during_restoration)
         
-        # Clear ratings
-        ratings = load_media_ratings()
-        ratings.pop(latest_fname, None)
-        save_media_ratings(ratings)
-        
-        await interaction.response.send_message(f"✅ Undo complete: Restored '{latest_fname}'", ephemeral=True)
+        await interaction.edit_original_response(content=final_message)
 
 
         # ========== Event Handlers ==========
