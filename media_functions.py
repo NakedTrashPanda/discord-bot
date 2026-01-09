@@ -596,46 +596,44 @@ def setup(bot: discord.Client):
 
     @tree.command(
             name="top_media", 
-            description="Top liked media (past week)")
+            description="Top voted media (past week)")
     async def top_media_cmd(interaction: discord.Interaction):
         ratings = load_media_ratings()
         history = load_history()
         metadata = history.get("metadata", {})
 
-        # Filter recent uploads (past 7 days)
         week_ago = (datetime.now() - timedelta(days=7)).isoformat()
         recent_files = [
             filename for filename, data in metadata.items()
             if data.get("upload_date", "") >= week_ago
         ]
 
-        # Sort by likes
         top_files = []
         for filename in recent_files:
             if filename in ratings:
-                likes = ratings[filename].get("likes", 0)
-                reactors = len(ratings[filename].get("reactors", []))
-                top_files.append((filename, likes, reactors))
+                votes = ratings[filename].get("votes", 0)
+                voters = len(ratings[filename].get("voters", []))
+                top_files.append((filename, votes, voters))
 
         top_files.sort(key=lambda x: x[1], reverse=True)
 
         if not top_files:
             await interaction.response.send_message(
-                "📊 No liked media from past week.",
+                "📊 No voted media from past week.",
                 ephemeral=True
             )
             return
 
         embed = discord.Embed(
-            title="⭐ Top Liked Media (Past 7 Days)",
+            title="🏆 Top Voted Media (Past 7 Days)",
+            description="Any reaction = 1 vote per user",
             color=0xF39C12
         )
 
-        for i, (filename, likes, reactors) in enumerate(top_files[:10], 1):
-            stars = "⭐" * min(likes, 5)
+        for i, (filename, votes, voters) in enumerate(top_files[:10], 1):
             embed.add_field(
                 name=f"{i}. {filename}",
-                value=f"{stars} **{likes} likes** ({reactors} unique users)",
+                value=f"**{votes} votes** from {voters} user{'s' if voters != 1 else ''}",
                 inline=False
             )
 
@@ -731,36 +729,34 @@ def setup(bot: discord.Client):
         await interaction.response.send_message(embeds=[embed, admin_embed], ephemeral=True)
 
         # ========== Event Handlers ==========
+    @bot.event
+    async def 
+    on_raw_reaction_add(payload):
+        """Track ANY reaction as a vote (one vote per user per message)."""
+        if payload.user_id == bot.user.id:
+        return
+
+    history = load_history()
+    metadata = history.get("metadata", {})
+    ratings = load_media_ratings()
+
+    # Find files from this message
+    rated_files = [
+        filename for filename, data in metadata.items()
+        if data.get("message_id") == payload.message_id
+    ]
+
+    if not rated_files:
+        return
+
+    # Count unique voters per message (not per emoji)
+    for filename in rated_files:
+        if filename not in ratings:
+            ratings[filename] = {"votes": 0, "voters": []}
+        
+        user_id = str(payload.user_id)
+        if user_id not in ratings[filename]["voters"]:
+            ratings[filename]["votes"] += 1
+            ratings[filename]["voters"].append(user_id)
     
-        async def on_raw_reaction_add(payload):
-            """Any reaction = +1 rating (simplified system)."""
-            if payload.user_id == bot.user.id:
-                return  # Ignore bot's own reactions
-    
-            # Load data
-            history = load_history()
-            metadata = history.get("metadata", {})
-            ratings = load_media_ratings()
-    
-            # Find files from this message
-            rated_files = [
-                filename for filename, data in metadata.items()
-                if data.get("message_id") == payload.message_id
-            ]
-    
-            if not rated_files:
-                return
-    
-            # ANY REACTION = +1 like
-            for filename in rated_files:
-                if filename not in ratings:
-                    ratings[filename] = {"likes": 0, "reactors": []}
-                
-                user_id = str(payload.user_id)
-                if user_id not in ratings[filename]["reactors"]:
-                    ratings[filename]["likes"] += 1
-                    ratings[filename]["reactors"].append(user_id)
-            
-            save_media_ratings(ratings)
-    
-        bot.add_listener(on_raw_reaction_add)
+    save_media_ratings(ratings)

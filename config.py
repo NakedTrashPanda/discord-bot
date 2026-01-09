@@ -25,6 +25,9 @@ if not DISCORD_TOKEN or DISCORD_TOKEN == "YOUR_REAL_DISCORD_TOKEN_WOULD_GO_HERE"
 if not TMDB_API_KEY or TMDB_API_KEY == "YOUR_REAL_TMDB_API_KEY_WOULD_GO_HERE":
     raise ValueError("TMDB_API_KEY not properly set in secrets.txt")
 
+# Bot owner ID for dev commands
+BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", 197677394042028032))  # Set this to your Discord user ID
+
 MEDIA_CHANNEL_ID = int(os.getenv("MEDIA_CHANNEL_ID", 439072343285956618))
 MOVIES_CHANNEL_ID = int(os.getenv("MOVIES_CHANNEL_ID", 370237203462488064))
 
@@ -40,6 +43,9 @@ VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
 MEDIA_FOLDER = Path(os.getenv("MEDIA_FOLDER", "media"))
 ARCHIVE_FOLDER = Path(os.getenv("ARCHIVE_FOLDER", "archive"))
 HISTORY_FILE = Path(os.getenv("HISTORY_FILE", "upload_history.json"))
+SCHEDULE_CONFIG_FILE = Path(os.getenv("SCHEDULE_CONFIG_FILE", "schedule_config.json"))
+USER_DATA_FILE = Path(os.getenv("USER_DATA_FILE", "user_data.json"))
+MEDIA_RATINGS_FILE = Path(os.getenv("MEDIA_RATINGS_FILE", "media_ratings.json"))
 
 MEDIA_FOLDER.mkdir(exist_ok=True)
 ARCHIVE_FOLDER.mkdir(exist_ok=True)
