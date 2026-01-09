@@ -1,0 +1,12 @@
+*env*
+GEMINI.md
+QWEN.md
+*cache*
+archive
+media/*
+upload_history.json
+secrets.py
+.env
+README.bak
+secrets.txt
+user_data.json
