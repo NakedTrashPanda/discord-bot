@@ -1,0 +1,116 @@
+[
+  {
+    "timestamp": "2026-01-10T23:03:25.808879",
+    "claim": "The world is flat",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:03:39.695780",
+    "claim": "the moon is real",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:07:12.261202",
+    "claim": "The world ends tomorrow",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:08:11.422039",
+    "claim": "5G causes coronavirus",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:08:36.177370",
+    "claim": "\"Vaccines contain microchips\"",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:18:01.770196",
+    "claim": "Is the world flat",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:18:46.758985",
+    "claim": "\"Vaccines contain microchips\"",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:20:01.852059",
+    "claim": "\"Hydroxychloroquine effective COVID treatment\"",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:41:36.734124",
+    "claim": "Is smoking bad for your health",
+    "user_id": 197677394042028032,
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-01-10T23:41:50.039089",
+    "claim": "\"Hydroxychloroquine effective COVID treatment\"",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-10T23:42:27.006795",
+    "claim": "\"Vaccines contain microchips\"",
+    "user_id": 197677394042028032,
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-01-10T23:46:24.888773",
+    "claim": "\"Vaccines contain microchips\"",
+    "user_id": 197677394042028032,
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-01-11T00:12:20.440977",
+    "claim": "\"Hydroxychloroquine effective COVID treatment\"",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-11T00:16:52.173301",
+    "claim": "\"Hydroxychloroquine effective COVID treatment\"",
+    "user_id": 197677394042028032,
+    "status": "no_results"
+  },
+  {
+    "timestamp": "2026-01-11T00:17:21.272961",
+    "claim": "\"Vaccines contain microchips\"",
+    "user_id": 197677394042028032,
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-01-11T00:17:54.604725",
+    "claim": "do vaccines cause cancer",
+    "user_id": 197677394042028032,
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-01-11T00:18:32.362335",
+    "claim": "does smoking cause cancer",
+    "user_id": 197677394042028032,
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-01-11T00:20:27.098359",
+    "claim": "Is smoking bad for health",
+    "user_id": 197677394042028032,
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-01-11T00:21:18.270554",
+    "claim": "is smoking bad for your health",
+    "user_id": 197677394042028032,
+    "status": "success"
+  }
+]

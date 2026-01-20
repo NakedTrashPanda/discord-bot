@@ -156,7 +156,51 @@ async def movie_info(interaction: discord.Interaction, movie_name: str):
         inline=False,
     )
 
-    await interaction.response.send_message(embed=embed)
+    view = SimilarMoviesView(tmdb_id)
+    await interaction.response.send_message(embed=embed, view=view)
+
+
+class SimilarMoviesView(discord.ui.View):
+    def __init__(self, tmdb_id: int, timeout=180):
+        super().__init__(timeout=timeout)
+        self.tmdb_id = tmdb_id
+
+    @discord.ui.button(label="More Like This", style=discord.ButtonStyle.blurple)
+    async def more_like_this(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        
+        similar_url = f"https://api.themoviedb.org/3/movie/{self.tmdb_id}/similar"
+        similar_res = requests.get(similar_url, params={"api_key": TMDB_API_KEY}).json()
+
+        if not similar_res.get("results"):
+            await interaction.followup.send("❌ Could not find similar movies.", ephemeral=True)
+            return
+
+        suggestions = similar_res["results"][:3] # Get top 3 suggestions
+        if not suggestions:
+            await interaction.followup.send("❌ No similar movies found.", ephemeral=True)
+            return
+
+        embeds = []
+        for item in suggestions:
+            title = item.get("title")
+            overview = item.get("overview", "No description available.")
+            if len(overview) > 200:
+                overview = overview[:200] + "..."
+            
+            embed = discord.Embed(
+                title=f"🎬 Similar: {title}",
+                description=overview,
+                color=0xF1C40F
+            )
+            if item.get("poster_path"):
+                embed.set_thumbnail(url=f"https://image.tmdb.org/t/p/w500{item['poster_path']}")
+            
+            embed.add_field(name="Rating", value=f"{item.get('vote_average', 'N/A')}/10", inline=True)
+            embeds.append(embed)
+        
+        await interaction.followup.send("Here are some similar movies:", embeds=embeds, ephemeral=True)
+
 
 
 async def show_info(interaction: discord.Interaction, show_name: str):
@@ -262,6 +306,49 @@ async def list_episodes(interaction: discord.Interaction, show_name: str, season
     await interaction.response.send_message(embed=embed)
 
 
+async def poll_monitor(bot, poll_message: discord.Message, movie_details: list, emojis: list, timeout_seconds: int = 300):
+    await asyncio.sleep(timeout_seconds)
+
+    # Fetch the updated message to get latest reactions
+    updated_message = await poll_message.channel.fetch_message(poll_message.id)
+
+    results = {}
+    for emoji in emojis:
+        results[emoji] = 0
+
+    for reaction in updated_message.reactions:
+        if reaction.emoji in emojis:
+            results[reaction.emoji] = reaction.count - 1 # Exclude bot's own reaction
+
+    # Determine winner(s)
+    winning_emojis = []
+    max_votes = 0
+    for emoji, votes in results.items():
+        if votes > max_votes:
+            max_votes = votes
+            winning_emojis = [emoji]
+        elif votes == max_votes and max_votes > 0:
+            winning_emojis.append(emoji)
+
+    winner_announcement = ""
+    if max_votes == 0:
+        winner_announcement = "The poll ended with no votes!"
+    elif len(winning_emojis) > 1:
+        winner_announcement = "It's a tie between:\n"
+        for emoji in winning_emojis:
+            index = emojis.index(emoji)
+            winner_announcement += f"{emoji} {movie_details[index]['title']}\n"
+        winner_announcement += f"with {max_votes} votes each!"
+    else:
+        winner_emoji = winning_emojis[0]
+        winner_index = emojis.index(winner_emoji)
+        winner_movie = movie_details[winner_index]
+        winner_announcement = f"The winner is: {winner_emoji} **{winner_movie['title']}** with {max_votes} votes!\n\n"
+        winner_announcement += f"Watch Now: https://rivestream.org/embed?type=movie&id={winner_movie['tmdb_id']}\n"
+        winner_announcement += f"Download: https://rivestream.org/download?type=movie&id={winner_movie['tmdb_id']}"
+
+    await poll_message.channel.send(winner_announcement)
+
 def setup(bot):
     tree = bot.tree
 
@@ -294,3 +381,72 @@ def setup(bot):
     @discord.app_commands.describe(show_name="The name of the TV show", season_number="The season number")
     async def episodes_slash(interaction: discord.Interaction, show_name: str, season_number: int):
         await list_episodes(interaction, show_name=show_name, season_number=season_number)
+
+    @tree.command(name="moviepoll", description="Create a poll to vote on movies to watch.")
+    @discord.app_commands.describe(
+        title1="First movie title",
+        title2="Second movie title",
+        title3="Third movie title (optional)",
+        title4="Fourth movie title (optional)",
+        title5="Fifth movie title (optional)"
+    )
+    async def moviepoll_slash(
+        interaction: discord.Interaction,
+        title1: str,
+        title2: str,
+        title3: str = None,
+        title4: str = None,
+        title5: str = None
+    ):
+        titles = [t for t in [title1, title2, title3, title4, title5] if t is not None]
+        
+        if len(titles) < 2:
+            await interaction.response.send_message("❌ Please provide at least two movie titles for the poll.", ephemeral=True)
+            return
+        if len(titles) > 5:
+            await interaction.response.send_message("❌ You can only provide up to five movie titles for the poll.", ephemeral=True)
+            return
+
+        await interaction.response.defer() # Defer the response as TMDB API calls can take time
+
+        movie_details = []
+        for title in titles:
+            url = "https://api.themoviedb.org/3/search/movie"
+            res = requests.get(url, params={"api_key": TMDB_API_KEY, "query": title}).json()
+            
+            if res.get("results"):
+                item = res["results"][0]
+                movie_details.append({
+                    "title": item.get("title"),
+                    "tmdb_id": item["id"],
+                    "poster_path": item.get("poster_path"),
+                    "overview": item.get("overview", "No description available."),
+                })
+            else:
+                await interaction.followup.send(f"❌ Could not find details for '{title}'. Skipping this title.", ephemeral=True)
+        
+        if not movie_details:
+            await interaction.followup.send("❌ No valid movie titles found to create a poll.", ephemeral=True)
+            return
+
+        emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+        poll_description = "Vote for your favorite movie:\n\n"
+        for i, movie in enumerate(movie_details):
+            poll_description += f"{emojis[i]} **{movie['title']}**\n"
+            poll_description += f"  *Overview:* {movie['overview'][:100]}...\n\n"
+        
+        embed = discord.Embed(
+            title="🍿 Movie Poll",
+            description=poll_description,
+            color=0xFFD700
+        )
+        if movie_details[0].get("poster_path"):
+            embed.set_thumbnail(url=f"https://image.tmdb.org/t/p/w500{movie_details[0]['poster_path']}")
+
+        poll_message = await interaction.followup.send(embed=embed)
+
+        for i in range(len(movie_details)):
+            await poll_message.add_reaction(emojis[i])
+
+        # TODO: Implement timeout and winner announcement
+        await interaction.followup.send("Poll created! Voting ends after a set time. (Winner announcement coming soon!)", ephemeral=True)

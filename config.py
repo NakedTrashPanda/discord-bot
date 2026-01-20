@@ -22,6 +22,7 @@ def load_secrets_from_file():
 secrets = load_secrets_from_file()
 DISCORD_TOKEN = secrets.get('DISCORD_TOKEN')
 TMDB_API_KEY = secrets.get('TMDB_API_KEY')
+GEMINI_API_KEY = secrets.get('GEMINI_API_KEY')
 
 if not DISCORD_TOKEN or DISCORD_TOKEN == "YOUR_REAL_DISCORD_TOKEN_WOULD_GO_HERE":
     raise ValueError("DISCORD_TOKEN not properly set in secrets.txt")
